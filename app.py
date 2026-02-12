@@ -419,6 +419,59 @@ def handle_quizzes(classroom_id):
     
     return jsonify([dict(q) for q in quizzes])
 
+@app.route('/api/quizzes/<int:quiz_id>', methods=['PUT', 'DELETE'])
+@login_required
+def modify_quiz(quiz_id):
+    conn = get_db()
+    quiz = conn.execute('SELECT * FROM quizzes WHERE id = ?', (quiz_id,)).fetchone()
+    
+    if not quiz:
+        conn.close()
+        return jsonify({'error': 'Quiz not found'}), 404
+    
+    classroom = conn.execute('SELECT * FROM classrooms WHERE id = ?', (quiz['classroom_id'],)).fetchone()
+    user = conn.execute('SELECT role FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    
+    if user['role'] != 'teacher' or classroom['teacher_id'] != session['user_id']:
+        conn.close()
+        return jsonify({'error': 'Access denied'}), 403
+    
+    if request.method == 'DELETE':
+        conn.execute('DELETE FROM answers WHERE quiz_id = ?', (quiz_id,))
+        conn.execute('DELETE FROM quiz_results WHERE quiz_id = ?', (quiz_id,))
+        conn.execute('DELETE FROM questions WHERE quiz_id = ?', (quiz_id,))
+        conn.execute('DELETE FROM quizzes WHERE id = ?', (quiz_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True}), 200
+    
+    if request.method == 'PUT':
+        data = request.get_json()
+        title = data.get('title')
+        instructions = data.get('instructions', '')
+        quiz_type = data.get('quiz_type')
+        deadline = data.get('deadline')
+        questions = data.get('questions', [])
+        
+        if not all([title, quiz_type, questions]):
+            conn.close()
+            return jsonify({'error': 'Missing required fields'}), 400
+            
+        c = conn.cursor()
+        c.execute('UPDATE quizzes SET title = ?, instructions = ?, quiz_type = ?, deadline = ? WHERE id = ?',
+                 (title, instructions, quiz_type, deadline, quiz_id))
+        
+        c.execute('DELETE FROM questions WHERE quiz_id = ?', (quiz_id,))
+        for idx, q in enumerate(questions):
+            options = json.dumps(q.get('options', [])) if 'options' in q else None
+            c.execute('INSERT INTO questions (quiz_id, question_text, question_type, correct_answer, options, question_order) VALUES (?, ?, ?, ?, ?, ?)',
+                     (quiz_id, q['question'], q.get('type', quiz_type), q['correct_answer'], options, idx))
+        
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True}), 200
+
+
 @app.route('/api/quizzes/<int:quiz_id>')
 @login_required
 def get_quiz(quiz_id):

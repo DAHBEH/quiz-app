@@ -472,6 +472,22 @@ body {
     margin-top: 12px;
 }
 
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+}
+
+.quiz-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
 /* Results Table */
 .results-table {
     width: 100%;
