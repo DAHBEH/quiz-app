@@ -754,3 +754,191 @@ body {
 .text-muted {
     color: #999;
 }
+
+/* Announcements */
+.announcements-list {
+    margin-top: 20px;
+}
+
+.announcement-item {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border-left: 4px solid #667eea;
+}
+
+.announcement-item h5 {
+    color: #333;
+    margin-bottom: 10px;
+    font-size: 16px;
+}
+
+.announcement-content {
+    color: #555;
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+.announcement-meta {
+    color: #888;
+    font-size: 12px;
+}
+
+.announcement-item .btn-danger {
+    margin-top: 10px;
+    padding: 8px 16px;
+    font-size: 12px;
+}
+
+/* Student Dashboard Announcements */
+.announcement-card {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border-left: 4px solid #667eea;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.announcement-card:hover {
+    transform: translateX(5px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.announcement-card h4 {
+    color: #333;
+    margin-bottom: 10px;
+    font-size: 18px;
+}
+
+.announcement-text {
+    color: #555;
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+/* Quiz Statistics */
+.stats-container {
+    margin-top: 20px;
+}
+
+.stat-item {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.stat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.stat-number {
+    font-weight: bold;
+    color: #667eea;
+    font-size: 14px;
+}
+
+.stat-percentage {
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.stat-question {
+    color: #333;
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+
+.stat-correct {
+    color: #28a745;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.stat-wrong-count {
+    color: #dc3545;
+    margin-bottom: 5px;
+}
+
+.stat-common-wrong {
+    color: #ffc107;
+    font-weight: 600;
+}
+
+/* Student Progress */
+.progress-table {
+    margin-top: 15px;
+}
+
+.progress-table .not-taken {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.progress-summary {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.progress-summary p {
+    margin-bottom: 5px;
+}
+
+/* Results Table */
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+.results-table th,
+.results-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.results-table th {
+    background: #667eea;
+    color: white;
+    font-weight: 600;
+}
+
+.results-table tr:hover {
+    background: #f8f9fa;
+}
+
+/* Anti-cheat message */
+.anti-cheat-message {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(220, 53, 69, 0.95);
+    color: white;
+    padding: 20px 40px;
+    border-radius: 10px;
+    font-size: 18px;
+    font-weight: bold;
+    z-index: 2000;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.8);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}

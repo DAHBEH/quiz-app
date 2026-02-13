@@ -141,20 +141,16 @@ def init_db():
         UNIQUE(student_id, quiz_id)
     )''')
     
-    # Files table
-    c.execute('''CREATE TABLE IF NOT EXISTS files (
+    # Announcements table
+    c.execute('''CREATE TABLE IF NOT EXISTS announcements (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         classroom_id INTEGER NOT NULL,
-        filename TEXT NOT NULL,
-        original_filename TEXT NOT NULL,
-        custom_name TEXT NOT NULL,
-        instructions TEXT,
-        title TEXT,
-        deadline TIMESTAMP,
-        uploaded_by INTEGER NOT NULL,
-        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_by INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (classroom_id) REFERENCES classrooms(id),
-        FOREIGN KEY (uploaded_by) REFERENCES users(id)
+        FOREIGN KEY (created_by) REFERENCES users(id)
     )''')
     
     conn.commit()
@@ -847,6 +843,195 @@ def download_file(file_id):
         return jsonify({'error': 'File not found on server'}), 404
     
     return send_file(filepath, as_attachment=True, download_name=file_record['original_filename'])
+
+# ==================== ANNOUNCEMENTS ====================
+
+@app.route('/api/classrooms/<int:classroom_id>/announcements', methods=['GET', 'POST'])
+@login_required
+def handle_announcements(classroom_id):
+    conn = get_db()
+    classroom = conn.execute('SELECT * FROM classrooms WHERE id = ?', (classroom_id,)).fetchone()
+    
+    if not classroom:
+        conn.close()
+        return jsonify({'error': 'Classroom not found'}), 404
+    
+    user = conn.execute('SELECT role FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    
+    # Check access
+    if user['role'] == 'teacher' and classroom['teacher_id'] != session['user_id']:
+        conn.close()
+        return jsonify({'error': 'Access denied'}), 403
+    
+    if user['role'] == 'student':
+        enrollment = conn.execute('SELECT * FROM enrollments WHERE student_id = ? AND classroom_id = ?',
+                                 (session['user_id'], classroom_id)).fetchone()
+        if not enrollment:
+            conn.close()
+            return jsonify({'error': 'Access denied'}), 403
+    
+    if request.method == 'POST':
+        # Teachers can create announcements
+        if user['role'] != 'teacher':
+            conn.close()
+            return jsonify({'error': 'Only teachers can create announcements'}), 403
+        
+        data = request.get_json()
+        title = data.get('title')
+        content = data.get('content')
+        
+        if not title or not content:
+            conn.close()
+            return jsonify({'error': 'Title and content are required'}), 400
+        
+        conn.execute('INSERT INTO announcements (classroom_id, title, content, created_by) VALUES (?, ?, ?, ?)',
+                    (classroom_id, title, content, session['user_id']))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True}), 201
+    
+    # GET - return announcements
+    announcements = conn.execute('''
+        SELECT a.*, u.username as creator_name
+        FROM announcements a
+        JOIN users u ON a.created_by = u.id
+        WHERE a.classroom_id = ?
+        ORDER BY a.created_at DESC
+    ''', (classroom_id,)).fetchall()
+    
+    conn.close()
+    return jsonify([dict(a) for a in announcements])
+
+@app.route('/api/classrooms/<int:classroom_id>/announcements/<int:announcement_id>', methods=['DELETE'])
+@login_required
+def delete_announcement(classroom_id, announcement_id):
+    conn = get_db()
+    announcement = conn.execute('SELECT * FROM announcements WHERE id = ? AND classroom_id = ?', 
+                              (announcement_id, classroom_id)).fetchone()
+    
+    if not announcement:
+        conn.close()
+        return jsonify({'error': 'Announcement not found'}), 404
+    
+    # Only the teacher who created it can delete
+    classroom = conn.execute('SELECT * FROM classrooms WHERE id = ?', (classroom_id,)).fetchone()
+    user = conn.execute('SELECT role FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    
+    if user['role'] != 'teacher' or classroom['teacher_id'] != session['user_id']:
+        conn.close()
+        return jsonify({'error': 'Access denied'}), 403
+    
+    conn.execute('DELETE FROM announcements WHERE id = ?', (announcement_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True}), 200
+
+# ==================== QUIZ WRONG ANSWER STATISTICS ====================
+
+@app.route('/api/quizzes/<int:quiz_id>/wrong-answer-stats')
+@teacher_required
+def get_wrong_answer_stats(quiz_id):
+    conn = get_db()
+    
+    # Verify quiz belongs to teacher's classroom
+    quiz = conn.execute('SELECT * FROM quizzes WHERE id = ?', (quiz_id,)).fetchone()
+    if not quiz:
+        conn.close()
+        return jsonify({'error': 'Quiz not found'}), 404
+    
+    classroom = conn.execute('SELECT * FROM classrooms WHERE id = ?', (quiz['classroom_id'],)).fetchone()
+    if classroom['teacher_id'] != session['user_id']:
+        conn.close()
+        return jsonify({'error': 'Access denied'}), 403
+    
+    # Get all questions for this quiz
+    questions = conn.execute('SELECT * FROM questions WHERE quiz_id = ?', (quiz_id,)).fetchall()
+    
+    # Get total number of students who took the quiz
+    total_students = conn.execute('SELECT COUNT(DISTINCT student_id) FROM quiz_results WHERE quiz_id = ?', 
+                                  (quiz_id,)).fetchone()[0]
+    
+    if total_students == 0:
+        conn.close()
+        return jsonify({'message': 'No students have taken this quiz yet', 'stats': []})
+    
+    stats = []
+    for question in questions:
+        # Count wrong answers for this question
+        wrong_count = conn.execute('''
+            SELECT COUNT(*) FROM answers
+            WHERE question_id = ? AND is_correct = 0
+        ''', (question['id'],)).fetchone()[0]
+        
+        # Count total answers for this question
+        total_answers = conn.execute('''
+            SELECT COUNT(*) FROM answers
+            WHERE question_id = ?
+        ''', (question['id'],)).fetchone()[0]
+        
+        wrong_percentage = (wrong_count / total_answers * 100) if total_answers > 0 else 0
+        
+        # Get the most common wrong answer
+        wrong_answers = conn.execute('''
+            SELECT answer, COUNT(*) as count
+            FROM answers
+            WHERE question_id = ? AND is_correct = 0
+            GROUP BY answer
+            ORDER BY count DESC
+            LIMIT 1
+        ''', (question['id'],)).fetchone()
+        
+        most_common_wrong = wrong_answers['answer'] if wrong_answers else None
+        
+        stats.append({
+            'question_id': question['id'],
+            'question_text': question['question_text'],
+            'correct_answer': question['correct_answer'],
+            'total_answers': total_answers,
+            'wrong_count': wrong_count,
+            'wrong_percentage': round(wrong_percentage, 2),
+            'most_common_wrong_answer': most_common_wrong
+        })
+    
+    # Sort by wrong percentage (highest first)
+    stats.sort(key=lambda x: x['wrong_percentage'], reverse=True)
+    
+    conn.close()
+    return jsonify({
+        'total_students': total_students,
+        'stats': stats
+    })
+
+@app.route('/api/quizzes/<int:quiz_id>/student-progress')
+@teacher_required
+def get_student_progress(quiz_id):
+    conn = get_db()
+    
+    # Verify quiz belongs to teacher's classroom
+    quiz = conn.execute('SELECT * FROM quizzes WHERE id = ?', (quiz_id,)).fetchone()
+    if not quiz:
+        conn.close()
+        return jsonify({'error': 'Quiz not found'}), 404
+    
+    classroom = conn.execute('SELECT * FROM classrooms WHERE id = ?', (quiz['classroom_id'],)).fetchone()
+    if classroom['teacher_id'] != session['user_id']:
+        conn.close()
+        return jsonify({'error': 'Access denied'}), 403
+    
+    # Get all enrolled students and their quiz status
+    students = conn.execute('''
+        SELECT u.id, u.username, u.email, e.section, qr.score, qr.total_questions, qr.percentage, qr.completed_at
+        FROM users u
+        JOIN enrollments e ON u.id = e.student_id
+        LEFT JOIN quiz_results qr ON u.id = qr.student_id AND qr.quiz_id = ?
+        WHERE e.classroom_id = ?
+        ORDER BY e.enrolled_at DESC
+    ''', (quiz_id, quiz['classroom_id'])).fetchall()
+    
+    conn.close()
+    return jsonify([dict(s) for s in students])
 
 if __name__ == '__main__':
     init_db()

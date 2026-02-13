@@ -59,10 +59,11 @@
             <h2 id="classroomModalTitle"></h2>
 
             <div class="modal-tabs">
-                <button class="tab-button active" onclick="switchTab('quizzes')">Quizzes</button>
-                <button class="tab-button" onclick="switchTab('files')">Files</button>
+                <button class="tab-button active" onclick="switchTab('quizzes')">Create Quizzes</button>
+                <button class="tab-button" onclick="switchTab('files')">Upload Files</button>
+                <button class="tab-button" onclick="switchTab('announcements')">Announcements</button>
                 <button class="tab-button" onclick="switchTab('students')">Students</button>
-                <button class="tab-button" onclick="switchTab('results')">Results</button>
+                <button class="tab-button" onclick="switchTab('results')">Results & Stats</button>
             </div>
 
             <div id="quizzesTab" class="tab-content active">
@@ -123,13 +124,34 @@
                 <div id="filesList" class="files-list" style="margin-top: 20px;"></div>
             </div>
 
+            <div id="announcementsTab" class="tab-content">
+                <h3>Create Announcement</h3>
+                <form id="createAnnouncementForm">
+                    <div class="form-group">
+                        <label for="announcementTitle">Title:</label>
+                        <input type="text" id="announcementTitle" required
+                            placeholder="e.g., Quiz Reminder, Class Update">
+                    </div>
+                    <div class="form-group">
+                        <label for="announcementContent">Content:</label>
+                        <textarea id="announcementContent" required placeholder="Enter your announcement here..."
+                            style="min-height: 150px;"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Post Announcement</button>
+                </form>
+                <div id="announcementsList" class="announcements-list" style="margin-top: 20px;">
+                    <h4>Posted Announcements</h4>
+                    <div id="teacherAnnouncementsContainer"></div>
+                </div>
+            </div>
+
             <div id="studentsTab" class="tab-content">
                 <h3>Enrolled Students</h3>
                 <div id="studentsList" class="students-list"></div>
             </div>
 
             <div id="resultsTab" class="tab-content">
-                <h3>Quiz Results</h3>
+                <h3>Quiz Results & Analytics</h3>
                 <div id="resultsList"></div>
             </div>
         </div>
@@ -183,9 +205,8 @@
             document.getElementById('classroomModalTitle').textContent = `Manage: ${classroomName}`;
             document.getElementById('classroomModal').style.display = 'block';
             switchTab('quizzes');
-            loadClassroomQuizzes();
             loadClassroomFiles();
-            loadEnrolledStudents();
+            loadTeacherAnnouncements();
         }
 
         function closeClassroomModal() {
@@ -204,6 +225,15 @@
             // Show selected tab
             document.getElementById(tabName + 'Tab').classList.add('active');
             event.target.classList.add('active');
+
+            // Load data for the selected tab
+            if (tabName === 'students') {
+                loadEnrolledStudents();
+            } else if (tabName === 'announcements') {
+                loadTeacherAnnouncements();
+            } else if (tabName === 'quizzes') {
+                loadClassroomQuizzes();
+            }
         }
 
         async function loadClassroomQuizzes() {
@@ -330,8 +360,19 @@
 
         async function loadEnrolledStudents() {
             try {
+                console.log('Loading students for classroom:', currentClassroomId);
                 const response = await fetch(`/api/classrooms/${currentClassroomId}/students`);
+                console.log('Response status:', response.status);
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Error loading students:', errorData);
+                    document.getElementById('studentsList').innerHTML = `<p>Error loading students: ${errorData.error || 'Unknown error'}</p>`;
+                    return;
+                }
+
                 const students = await response.json();
+                console.log('Students loaded:', students);
 
                 const studentsList = document.getElementById('studentsList');
                 studentsList.innerHTML = '';
@@ -355,15 +396,22 @@
                 });
             } catch (error) {
                 console.error('Error loading students:', error);
+                document.getElementById('studentsList').innerHTML = '<p>Error loading students. Please try again.</p>';
             }
         }
 
         function kickStudent(studentId, studentName) {
             if (!confirm(`Are you sure you want to kick ${studentName} from this classroom?`)) return;
 
+            console.log('Kicking student:', studentId, 'from classroom:', currentClassroomId);
+
             fetch(`/api/classrooms/${currentClassroomId}/students/${studentId}`, { method: 'DELETE' })
-                .then(response => response.json())
+                .then(response => {
+                    console.log('Kick response status:', response.status);
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Kick response data:', data);
                     if (data.success) {
                         alert('Student kicked successfully!');
                         loadEnrolledStudents();
@@ -371,7 +419,10 @@
                         alert(data.error || 'Error kicking student');
                     }
                 })
-                .catch(error => console.error('Error kicking student:', error));
+                .catch(error => {
+                    console.error('Error kicking student:', error);
+                    alert('Error kicking student. Please try again.');
+                });
         }
 
         async function loadClassroomFiles() {
@@ -574,6 +625,266 @@
 
         document.getElementById('classroomSearch').addEventListener('input', loadClassrooms);
 
+        // ==================== ANNOUNCEMENTS ====================
+        document.getElementById('createAnnouncementForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const title = document.getElementById('announcementTitle').value;
+            const content = document.getElementById('announcementContent').value;
+
+            try {
+                const response = await fetch(`/api/classrooms/${currentClassroomId}/announcements`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, content })
+                });
+
+                if (response.ok) {
+                    alert('Announcement posted successfully!');
+                    document.getElementById('createAnnouncementForm').reset();
+                    loadTeacherAnnouncements();
+                } else {
+                    const data = await response.json();
+                    alert(data.error || 'Error posting announcement');
+                }
+            } catch (error) {
+                console.error('Error posting announcement:', error);
+            }
+        });
+
+        async function loadTeacherAnnouncements() {
+            try {
+                const response = await fetch(`/api/classrooms/${currentClassroomId}/announcements`);
+                const announcements = await response.json();
+
+                const container = document.getElementById('teacherAnnouncementsContainer');
+                container.innerHTML = '';
+
+                if (announcements.length === 0) {
+                    container.innerHTML = '<p>No announcements yet.</p>';
+                    return;
+                }
+
+                announcements.forEach(announcement => {
+                    const div = document.createElement('div');
+                    div.className = 'announcement-item';
+                    div.innerHTML = `
+                        <h5>${announcement.title}</h5>
+                        <p class="announcement-content">${announcement.content}</p>
+                        <p class="announcement-meta">Posted by ${announcement.creator_name} on ${new Date(announcement.created_at).toLocaleString()}</p>
+                        <button onclick="deleteAnnouncement(${announcement.id})" class="btn btn-danger">Delete</button>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error loading announcements:', error);
+            }
+        }
+
+        async function deleteAnnouncement(announcementId) {
+            if (!confirm('Are you sure you want to delete this announcement?')) return;
+
+            try {
+                const response = await fetch(`/api/classrooms/${currentClassroomId}/announcements/${announcementId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    alert('Announcement deleted!');
+                    loadTeacherAnnouncements();
+                } else {
+                    const data = await response.json();
+                    alert(data.error || 'Error deleting announcement');
+                }
+            } catch (error) {
+                console.error('Error deleting announcement:', error);
+            }
+        }
+
+        // ==================== QUIZ RESULTS & STATISTICS ====================
+        async function viewQuizResults(quizId) {
+            try {
+                const response = await fetch(`/api/quizzes/${quizId}/results`);
+                const results = await response.json();
+
+                const resultsList = document.getElementById('resultsList');
+                resultsList.innerHTML = '<h4>Quiz Results</h4>';
+
+                if (Array.isArray(results)) {
+                    const table = document.createElement('table');
+                    table.className = 'results-table';
+                    table.innerHTML = `
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Section</th>
+                                <th>Score</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${results.map(r => `
+                                <tr>
+                                    <td>${r.student_name}</td>
+                                    <td>${r.section || 'N/A'}</td>
+                                    <td>${r.score}/${r.total}</td>
+                                    <td>${r.percentage.toFixed(2)}%</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    `;
+                    resultsList.appendChild(table);
+                } else {
+                    resultsList.innerHTML += '<p>No results available.</p>';
+                }
+
+                // Add button to view wrong answer statistics
+                const statsBtn = document.createElement('button');
+                statsBtn.className = 'btn btn-secondary';
+                statsBtn.style.marginTop = '20px';
+                statsBtn.textContent = 'View Wrong Answer Statistics';
+                statsBtn.onclick = () => viewWrongAnswerStats(quizId);
+                resultsList.appendChild(statsBtn);
+
+                // Add button to view student progress
+                const progressBtn = document.createElement('button');
+                progressBtn.className = 'btn btn-secondary';
+                progressBtn.style.marginTop = '10px';
+                progressBtn.style.marginLeft = '10px';
+                progressBtn.textContent = 'View Student Progress';
+                progressBtn.onclick = () => viewStudentProgress(quizId);
+                resultsList.appendChild(progressBtn);
+            } catch (error) {
+                console.error('Error loading results:', error);
+            }
+        }
+
+        async function viewWrongAnswerStats(quizId) {
+            try {
+                const response = await fetch(`/api/quizzes/${quizId}/wrong-answer-stats`);
+                const data = await response.json();
+
+                const resultsList = document.getElementById('resultsList');
+                resultsList.innerHTML = `<h4>Wrong Answer Statistics</h4>`;
+                resultsList.innerHTML += `<p><strong>Total Students Who Took Quiz:</strong> ${data.total_students}</p>`;
+
+                if (data.stats && data.stats.length > 0) {
+                    const statsContainer = document.createElement('div');
+                    statsContainer.className = 'stats-container';
+
+                    data.stats.forEach((stat, index) => {
+                        const statDiv = document.createElement('div');
+                        statDiv.className = 'stat-item';
+                        statDiv.style.borderLeft = stat.wrong_percentage > 50 ? '4px solid #dc3545' : '4px solid #28a745';
+
+                        statDiv.innerHTML = `
+                            <div class="stat-header">
+                                <span class="stat-number">#${index + 1}</span>
+                                <span class="stat-percentage">${stat.wrong_percentage}% Wrong</span>
+                            </div>
+                            <p class="stat-question"><strong>Q:</strong> ${stat.question_text}</p>
+                            <p class="stat-correct"><strong>Correct Answer:</strong> ${stat.correct_answer}</p>
+                            <p class="stat-wrong-count">Wrong Answers: ${stat.wrong_count} out of ${stat.total_answers}</p>
+                            ${stat.most_common_wrong_answer ? `
+                                <p class="stat-common-wrong"><strong>Most Common Wrong:</strong> ${stat.most_common_wrong_answer}</p>
+                            ` : ''}
+                        `;
+                        statsContainer.appendChild(statDiv);
+                    });
+
+                    resultsList.appendChild(statsContainer);
+                } else {
+                    resultsList.innerHTML += '<p>No statistics available yet.</p>';
+                }
+
+                // Add back button
+                const backBtn = document.createElement('button');
+                backBtn.className = 'btn btn-secondary';
+                backBtn.style.marginTop = '20px';
+                backBtn.textContent = 'Back to Results';
+                backBtn.onclick = () => {
+                    const quizId = currentClassroomId; // This will be reset when viewing results
+                    // Reload quizzes to get back to quiz list
+                    loadClassroomQuizzes();
+                };
+                resultsList.appendChild(backBtn);
+            } catch (error) {
+                console.error('Error loading wrong answer stats:', error);
+            }
+        }
+
+        async function viewStudentProgress(quizId) {
+            try {
+                const response = await fetch(`/api/quizzes/${quizId}/student-progress`);
+                const students = await response.json();
+
+                const resultsList = document.getElementById('resultsList');
+                resultsList.innerHTML = '<h4>Student Progress</h4>';
+
+                if (students.length > 0) {
+                    const table = document.createElement('table');
+                    table.className = 'results-table progress-table';
+                    table.innerHTML = `
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Section</th>
+                                <th>Status</th>
+                                <th>Score</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${students.map(s => `
+                                <tr class="${s.score === null ? 'not-taken' : ''}">
+                                    <td>${s.username}</td>
+                                    <td>${s.section || 'N/A'}</td>
+                                    <td>${s.score !== null ? 'Completed' : 'Not Taken'}</td>
+                                    <td>${s.score !== null ? s.score + '/' + s.total_questions : '-'}</td>
+                                    <td>${s.percentage !== null ? s.percentage.toFixed(2) + '%' : '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    `;
+                    resultsList.appendChild(table);
+
+                    // Summary
+                    const completed = students.filter(s => s.score !== null).length;
+                    const notTaken = students.filter(s => s.score === null).length;
+
+                    const summaryDiv = document.createElement('div');
+                    summaryDiv.className = 'progress-summary';
+                    summaryDiv.innerHTML = `
+                        <p><strong>Summary:</strong></p>
+                        <p>Completed: ${completed} students</p>
+                        <p>Not Taken: ${notTaken} students</p>
+                    `;
+                    resultsList.appendChild(summaryDiv);
+                } else {
+                    resultsList.innerHTML += '<p>No students enrolled.</p>';
+                }
+
+                // Add back button
+                const backBtn = document.createElement('button');
+                backBtn.className = 'btn btn-secondary';
+                backBtn.style.marginTop = '20px';
+                backBtn.textContent = 'Back to Results';
+                backBtn.onclick = () => loadClassroomQuizzes();
+                resultsList.appendChild(backBtn);
+            } catch (error) {
+                console.error('Error loading student progress:', error);
+            }
+        }
+
+        function openClassroom(classroomId, classroomName) {
+            currentClassroomId = classroomId;
+            document.getElementById('classroomModalTitle').textContent = `Manage: ${classroomName}`;
+            document.getElementById('classroomModal').style.display = 'block';
+            switchTab('quizzes');
+            loadClassroomQuizzes();
+            loadClassroomFiles();
+            loadTeacherAnnouncements();
+        }
 
         loadUserInfo();
         loadClassrooms();

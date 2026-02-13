@@ -66,6 +66,7 @@
             <div class="modal-tabs">
                 <button class="tab-button active" onclick="switchTab('quizzesView')">Quizzes</button>
                 <button class="tab-button" onclick="switchTab('filesView')">Files</button>
+                <button class="tab-button" onclick="switchTab('announcementsView')">Announcements</button>
             </div>
 
 
@@ -75,6 +76,11 @@
 
             <div id="filesViewTab" class="tab-content">
                 <div id="filesViewList"></div>
+            </div>
+
+            <div id="announcementsViewTab" class="tab-content">
+                <h3>Class Announcements</h3>
+                <div id="announcementsList"></div>
             </div>
         </div>
     </div>
@@ -256,10 +262,39 @@
             switchTab('quizzesView');
             loadClassroomQuizzes();
             loadClassroomFiles();
+            loadClassroomAnnouncements();
         }
 
         function closeClassroomView() {
             document.getElementById('classroomViewModal').style.display = 'none';
+        }
+
+        async function loadClassroomAnnouncements() {
+            try {
+                const response = await fetch(`/api/classrooms/${currentClassroomId}/announcements`);
+                const announcements = await response.json();
+
+                const announcementsList = document.getElementById('announcementsList');
+                announcementsList.innerHTML = '';
+
+                if (announcements.length === 0) {
+                    announcementsList.innerHTML = '<p>No announcements for this class yet.</p>';
+                    return;
+                }
+
+                announcements.forEach(announcement => {
+                    const div = document.createElement('div');
+                    div.className = 'announcement-card';
+                    div.innerHTML = `
+                        <h4>${announcement.title}</h4>
+                        <p class="announcement-text">${announcement.content}</p>
+                        <p class="announcement-meta">Posted: ${new Date(announcement.created_at).toLocaleString()}</p>
+                    `;
+                    announcementsList.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error loading announcements:', error);
+            }
         }
 
         async function loadClassroomQuizzes() {
@@ -556,6 +591,76 @@
                 }
             }, 1000);
         }
+
+        // ==================== COPY-PASTE PREVENTION ====================
+        // Prevent copy, cut, and paste on quiz content
+        document.getElementById('quizModal').addEventListener('copy', function (e) {
+            e.preventDefault();
+            showAntiCheatMessage('Copying is not allowed during the quiz!');
+        });
+
+        document.getElementById('quizModal').addEventListener('cut', function (e) {
+            e.preventDefault();
+            showAntiCheatMessage('Cutting is not allowed during the quiz!');
+        });
+
+        document.getElementById('quizModal').addEventListener('paste', function (e) {
+            e.preventDefault();
+            showAntiCheatMessage('Pasting is not allowed during the quiz!');
+        });
+
+        // Also prevent right-click context menu
+        document.getElementById('quizModal').addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+            showAntiCheatMessage('Right-click is disabled during the quiz!');
+        });
+
+        // Prevent keyboard shortcuts for copy/paste
+        document.addEventListener('keydown', function (e) {
+            // Check if quiz modal is open
+            if (document.getElementById('quizModal').style.display === 'block') {
+                // Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+U (view source), Ctrl+S (save)
+                if (e.ctrlKey && (e.key === 'c' || e.key === 'x' || e.key === 'v' || e.key === 'u' || e.key === 's')) {
+                    e.preventDefault();
+                    showAntiCheatMessage('Keyboard shortcut disabled during quiz!');
+                }
+            }
+        });
+
+        function showAntiCheatMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'anti-cheat-message';
+            messageDiv.textContent = message;
+            messageDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(220, 53, 69, 0.95);
+                color: white;
+                padding: 20px 40px;
+                border-radius: 10px;
+                font-size: 18px;
+                font-weight: bold;
+                z-index: 2000;
+                animation: fadeIn 0.3s ease;
+            `;
+            document.body.appendChild(messageDiv);
+
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 2000);
+        }
+
+        // Add animation for anti-cheat message
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 
