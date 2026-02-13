@@ -692,7 +692,7 @@ def download_file(file_id):
     
     if user['role'] == 'teacher' and classroom['teacher_id'] != session['user_id']:
         conn.close()
-        return jsonify({'error': 'Access denied'}), 403
+        return jsonify({'error': 'Access deni
     
     if user['role'] == 'student':
         enrollment = conn.execute('SELECT * FROM enrollments WHERE student_id = ? AND classroom_id = ?',
