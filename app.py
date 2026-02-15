@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file, Response
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file, Response, after_this_request
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
@@ -28,6 +28,11 @@ app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-pr
 app.config['UPLOAD_FOLDER'] = os.path.join(DATA_DIR, 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  
 
+# Session configuration for mobile compatibility
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True if using HTTPS
+
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'xlsx', 'xls', 'ppt', 'pptx', 'txt', 'jpg', 'jpeg', 'png', 'gif'}
 
 # make sure na yung upload folder exists
@@ -35,6 +40,18 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# CORS and headers for mobile compatibility
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
+@app.route('/cors-test')
+def cors_test():
+    return jsonify({'message': 'CORS working!'})
 
 def get_db():
     db_path = os.path.join(DATA_DIR, 'quiz_app.db')
@@ -394,9 +411,9 @@ def handle_classrooms():
         conn = get_db()
         c = conn.cursor()
         
-        # Check if classroom with same name already exists for this teacher
-        existing = conn.execute('SELECT id FROM classrooms WHERE name = ? AND teacher_id = ?', 
-                              (name, session['user_id'])).fetchone()
+        # Check if classroom with same name already exists (globally unique)
+        existing = conn.execute('SELECT id FROM classrooms WHERE name = ?', 
+                              (name,)).fetchone()
         if existing:
             conn.close()
             return jsonify({'error': 'This grade and section already exists. Please create a new one.'}), 400
