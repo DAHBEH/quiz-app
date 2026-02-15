@@ -19,6 +19,9 @@ if os.path.exists(RENDER_DISK_PATH):
 else:
     DATA_DIR = BASE_DIR
 
+# Admin secret key for direct admin access (can be overridden via environment variable)
+ADMIN_SECRET_KEY = os.environ.get('ADMIN_SECRET_KEY', 'G3 Capstone')
+
 # Use environment variables for production
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
