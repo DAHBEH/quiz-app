@@ -9,12 +9,20 @@ import csv
 import io
 from functools import wraps
 
-# Admin secret key for direct admin access (change this!)
-ADMIN_SECRET_KEY = 'G3 Capstone'
+# Get the directory where app.py is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = Flask(__name__)
-app.secret_key = 'your-secret-key-change-this-in-production'
-app.config['UPLOAD_FOLDER'] = 'uploads'
+# Use /app/data for persistent storage on Render, otherwise use local directory
+RENDER_DISK_PATH = os.environ.get('RENDER_DISK_PATH', '/app/data')
+if os.path.exists(RENDER_DISK_PATH):
+    DATA_DIR = RENDER_DISK_PATH
+else:
+    DATA_DIR = BASE_DIR
+
+# Use environment variables for production
+app = Flask(__name__, template_folder='templates', static_folder='static')
+app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
+app.config['UPLOAD_FOLDER'] = os.path.join(DATA_DIR, 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  
 
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'xlsx', 'xls', 'ppt', 'pptx', 'txt', 'jpg', 'jpeg', 'png', 'gif'}
@@ -26,7 +34,8 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_db():
-    conn = sqlite3.connect('quiz_app.db')
+    db_path = os.path.join(DATA_DIR, 'quiz_app.db')
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 
