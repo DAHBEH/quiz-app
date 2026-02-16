@@ -19,7 +19,7 @@ if os.path.exists(RENDER_DISK_PATH):
 else:
     DATA_DIR = BASE_DIR
 
-# Admin secret key for direct admin access (can be overridden via environment variable)
+# PASSWORD NAMIN AS A ADMIN
 ADMIN_SECRET_KEY = os.environ.get('ADMIN_SECRET_KEY', 'G3 Capstone')
 
 # Use environment variables for production
